@@ -36,7 +36,7 @@ class DeleteHelperTest extends PHPUnit_Framework_TestCase {
 	 *
 	 * @return void
 	 */
-	public function setUp() {
+	public function setUp(): void {
 		$mock = new Mock(
 			[ new Response(204, [])]
 		);
