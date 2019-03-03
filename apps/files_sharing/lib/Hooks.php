@@ -28,6 +28,7 @@ namespace OCA\Files_Sharing;
 use OC\Files\Filesystem;
 use OCP\IURLGenerator;
 use OCP\Files\IRootFolder;
+use OCP\IUserSession;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use OCP\Share\IShare;
 use Symfony\Component\EventDispatcher\GenericEvent;
@@ -44,6 +45,11 @@ class Hooks {
 	 * @var IRootFolder
 	 */
 	private $rootFolder;
+
+	/**
+	 * @var string|null
+	 */
+	private $uid;
 
 	/**
 	 * @var EventDispatcher
@@ -65,8 +71,10 @@ class Hooks {
 		IUrlGenerator $urlGenerator,
 		EventDispatcher $eventDispatcher,
 		\OCP\Share\IManager $shareManager,
-		NotificationPublisher $notificationPublisher
+		NotificationPublisher $notificationPublisher,
+		$uid
 	) {
+		$this->uid = $uid;
 		$this->rootFolder = $rootFolder;
 		$this->urlGenerator = $urlGenerator;
 		$this->eventDispatcher = $eventDispatcher;
@@ -129,6 +137,47 @@ class Hooks {
 			function (GenericEvent $event) {
 				$shareObject = $event->getArgument('shareObject');
 				$this->notificationPublisher->discardNotification($shareObject);
+			}
+		);
+
+		$this->eventDispatcher->addListener(
+			'file.beforeGetDirect',
+			function (GenericEvent $event) {
+				$pathsToCheck[] = $event->getArgument('path');
+
+				$viewOnlyHandler = new ViewOnly(
+					$this->rootFolder->getUserFolder($this->uid)
+				);
+				if (!$viewOnlyHandler->check($pathsToCheck)) {
+					$event->setArgument('errorMessage', 'File, folder or one of the files inside the folder cannot be downloaded');
+				}
+			}
+		);
+
+		$this->eventDispatcher->addListener(
+			'file.beforeCreateZip',
+			function (GenericEvent $event) {
+				$dir = $event->getArgument('dir');
+				$files = $event->getArgument('files');
+
+				$pathsToCheck = [];
+				if (\is_array($files)) {
+					foreach ($files as $file) {
+						$pathsToCheck[] = $dir . '/' . $file;
+					}
+				} elseif (\is_string($files)) {
+					$pathsToCheck[] = $dir . '/' . $files;
+				}
+
+				$viewOnlyHandler = new ViewOnly(
+					$this->rootFolder->getUserFolder($this->uid)
+				);
+				if (!$viewOnlyHandler->check($pathsToCheck)) {
+					$event->setArgument('errorMessage', 'File, folder or one of the files inside the folder cannot be downloaded');
+					$event->setArgument('run', false);
+				} else {
+					$event->setArgument('run', true);
+				}
 			}
 		);
 	}

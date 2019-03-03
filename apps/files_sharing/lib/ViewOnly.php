@@ -2,7 +2,7 @@
 /**
  * @author Piotr Mrowczynski piotr@owncloud.com
  *
- * @copyright Copyright (c) 2018, ownCloud GmbH
+ * @copyright Copyright (c) 2019, ownCloud GmbH
  * @license AGPL-3.0
  *
  * This code is free software: you can redistribute it and/or modify
@@ -19,48 +19,69 @@
  *
  */
 
-namespace OCA\Files;
+namespace OCA\Files_Sharing;
 
-use OCA\Files_Sharing\SharedStorage;
-use OCP\Files\FileInfo;
-use \OC\Files\Filesystem;
-
+use OCP\Files\File;
+use OCP\Files\Folder;
+use OCP\Files\Node;
+use OCP\Files\NotFoundException;
 
 /**
  * Handles restricting for download of files
  */
 class ViewOnly {
 
+	/** @var Folder */
+	private $userFolder;
+
+	public function __construct(Folder $userFolder) {
+		$this->userFolder = $userFolder;
+	}
+
 	/**
 	 * @param string[] $pathsToCheck
 	 * @return bool
 	 */
 	public function check($pathsToCheck) {
+		// If any of elements cannot be downloaded, prevent whole download
 		foreach ($pathsToCheck as $file) {
-			if (Filesystem::is_file($file)) {
-				// access to filecache is expensive in the loop
-				$fileInfo = Filesystem::getFileInfo($file);
-				return $this->checkFileInfo($fileInfo);
-			} elseif (Filesystem::is_dir($file)) {
-				// get directory content is rather cheap query
-				return $this->dirRecursiveCheck($file);
+			try {
+				$info = $this->userFolder->get($file);
+				if ($info instanceof File) {
+					// access to filecache is expensive in the loop
+					if (!$this->checkFileInfo($info)) {
+						return false;
+					}
+				} elseif ($info instanceof Folder) {
+					// get directory content is rather cheap query
+					if (!$this->dirRecursiveCheck($info)) {
+						return false;
+					}
+				}
+			} catch (NotFoundException $e) {
+				continue;
 			}
 		}
 		return true;
 	}
 
 	/**
-	 * @param string $dir
+	 * @param Folder $dirInfo
 	 * @return bool
+	 * @throws NotFoundException
 	 */
-	private function dirRecursiveCheck($dir) {
-		$files = Filesystem::getDirectoryContent($dir);
+	private function dirRecursiveCheck(Folder $dirInfo) {
+		if (!$this->checkFileInfo($dirInfo)) {
+			return false;
+		}
+		// If any of elements cannot be downloaded, prevent whole download
+		$files = $dirInfo->getDirectoryListing();
 		foreach ($files as $file) {
-			$filename = $file->getName();
-			if ($file->getType() === FileInfo::TYPE_FILE) {
-				return $this->checkFileInfo($file);
-			} elseif ($file->getType() === FileInfo::TYPE_FOLDER) {
-				$file = $dir . '/' . $filename;
+			if ($file instanceof File) {
+				if (!$this->checkFileInfo($file)) {
+					return false;
+				}
+			} elseif ($file instanceof Folder) {
 				return $this->dirRecursiveCheck($file);
 			}
 		}
@@ -69,10 +90,11 @@ class ViewOnly {
 	}
 
 	/**
-	 * @param FileInfo $fileInfo
+	 * @param Node $fileInfo
 	 * @return bool
+	 * @throws NotFoundException
 	 */
-	private function checkFileInfo(FileInfo $fileInfo) {
+	private function checkFileInfo(Node $fileInfo) {
 		// Restrict view-only to nodes which are shared
 		$storage = $fileInfo->getStorage();
 		if (!$storage->instanceOfStorage(SharedStorage::class)) {
@@ -84,8 +106,9 @@ class ViewOnly {
 		$share = $storage->getShare();
 
 		// Check if read-only and on whether permission can download is both set and disabled.
+
 		$canDownload = $share->getAttributes()->getAttribute('core', 'can-download');
-		if (!$fileInfo->isUpdateable() && $canDownload !== null && !$canDownload) {
+		if ($canDownload !== null && !$canDownload) {
 			return false;
 		}
 		return true;

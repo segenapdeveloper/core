@@ -23,7 +23,6 @@
 namespace OCA\Files_Sharing\Controller;
 
 use OC\OCS\Result;
-use OC\Share20\ShareAttributes;
 use OCP\AppFramework\OCSController;
 use OCP\Constants;
 use OCP\Files\IRootFolder;
@@ -41,7 +40,6 @@ use OCP\Lock\LockedException;
 use OCP\Share;
 use OCP\Share\Exceptions\GenericShareException;
 use OCP\Share\Exceptions\ShareNotFound;
-use OCP\Share\IAttributes;
 use OCP\Share\IManager;
 use OCP\Share\IShare;
 use OCA\Files_Sharing\Service\NotificationPublisher;
@@ -226,7 +224,7 @@ class Share20OcsController extends OCSController {
 
 		$attributes = $share->getAttributes();
 		if ($attributes !== null) {
-			// Share provider supports extra permissions
+			// Share provider supports share attributes
 			$formattedShareAttributes = [];
 			foreach ($attributes->getScopes() as $scope) {
 				foreach ($attributes->getKeys($scope) as $key) {
@@ -886,6 +884,7 @@ class Share20OcsController extends OCSController {
 			$share->getNode()->unlock(ILockingProvider::LOCK_SHARED);
 			return new Result(null, 400, $this->l->t('Cannot parse extra share permissions'));
 		}
+
 		try {
 			$share = $this->shareManager->updateShare($share);
 		} catch (\Exception $e) {
@@ -1222,9 +1221,9 @@ class Share20OcsController extends OCSController {
 	 * @param string[][]|null $formattedShareAttributes
 	 * @return IShare modified share
 	 */
-	private function setShareAttributes($share, $formattedShareAttributes) {
+	private function setShareAttributes(IShare $share, $formattedShareAttributes) {
+		$newShareAttributes = $this->shareManager->newShare()->newAttributes();
 		if ($formattedShareAttributes != null) {
-			$newShareAttributes = $this->shareManager->newShare()->newAttributes();
 			foreach ($formattedShareAttributes as $formattedAttr) {
 				$newShareAttributes->setAttribute(
 					$formattedAttr["scope"],
@@ -1232,10 +1231,8 @@ class Share20OcsController extends OCSController {
 					(bool) \json_decode($formattedAttr["enabled"])
 				);
 			}
-			$share->setAttributes($newShareAttributes);
-		} else {
-			$share->setAttributes(null);
 		}
+		$share->setAttributes($newShareAttributes);
 
 		return $share;
 	}
