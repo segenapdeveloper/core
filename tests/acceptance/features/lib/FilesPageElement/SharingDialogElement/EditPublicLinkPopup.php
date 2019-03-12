@@ -50,6 +50,7 @@ class EditPublicLinkPopup extends OwncloudPage {
 	private $permissionLabelXpath = [
 		'read' => ".//label[contains(@for, 'sharingDialogAllowPublicRead')]",
 		'read-write' => ".//label[contains(@for, 'sharingDialogAllowPublicReadWrite')]",
+		'upload-wirte-without-modify' =>  ".//label[contains(@for, 'sharingDialogAllowpublicUploadWrite')]",
 		'upload' => ".//label[contains(@for, 'sharingDialogAllowPublicUpload')]"
 	];
 	private $popupCloseButton = "//a[@class='oc-dialog-close']";
