@@ -377,6 +377,9 @@ class DefaultShareProvider implements IShareProvider {
 				throw new ProviderException('Recipient not in receiving group');
 			}
 
+			// using transaction to prevent concurrent updates
+			$this->dbConn->beginTransaction();
+
 			// Check if there is a usergroup share
 			$qb = $this->dbConn->getQueryBuilder();
 			$stmt = $qb->select('id')
@@ -424,6 +427,8 @@ class DefaultShareProvider implements IShareProvider {
 					->where($qb->expr()->eq('id', $qb->createNamedParameter($data['id'])))
 					->execute();
 			}
+
+			$this->dbConn->commit();
 		} else {
 			throw new ProviderException('Can\'t update share of recipient for share type ' . $share->getShareType());
 		}
