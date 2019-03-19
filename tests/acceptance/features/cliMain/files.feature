@@ -77,6 +77,70 @@ Feature: Files Operations command
       | grp1                 |
       | commas,in,group,name |
 
+  Scenario: Adding a folder to local storage, sharing with groups and running scan for a list of groups should add files for users of the groups
+    Given using new DAV path
+    And these users have been created with default attributes:
+      | username |
+      | user1    |
+      | user2    |
+      | user3    |
+      | user4    |
+    And group "grp2" has been created
+    And group "grp3" has been created
+    And group "grp4" has been created
+    And user "user2" has been added to group "grp2"
+    And user "user3" has been added to group "grp3"
+    And user "user4" has been added to group "grp4"
+    And user "user1" has created folder "/local_storage/folder2"
+    And user "user1" has created folder "/local_storage/folder3"
+    And user "user1" has created folder "/local_storage/folder4"
+    And the administrator has set the external storage "local_storage" to be never scanned automatically
+    And user "user1" has shared folder "/local_storage/folder2" with group "grp2"
+    And user "user1" has shared folder "/local_storage/folder3" with group "grp3"
+    And user "user1" has shared folder "/local_storage/folder4" with group "grp4"
+    And the administrator has scanned the filesystem for all users
+    And the administrator has scanned the filesystem for groups list "grp2,grp3,grp4"
+    When the administrator creates file "folder2/hello2.txt" with content "<? php :)" in local storage using the testing API
+    And the administrator creates file "folder3/hello3.txt" with content "<? php :)" in local storage using the testing API
+    And the administrator creates file "folder4/hello4.txt" with content "<? php :)" in local storage using the testing API
+    And user "user1" requests "/remote.php/dav/files/user1/local_storage/folder2" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello2.txt |
+    When user "user1" requests "/remote.php/dav/files/user1/local_storage/folder3" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello3.txt |
+    When user "user1" requests "/remote.php/dav/files/user1/local_storage/folder4" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello4.txt |
+    When user "user2" requests "/remote.php/dav/files/user2/local_storage/folder2" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello2.txt |
+    When user "user3" requests "/remote.php/dav/files/user3/local_storage/folder3" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello3.txt |
+    When user "user4" requests "/remote.php/dav/files/user4/local_storage/folder4" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello4.txt |
+    When the administrator scans the filesystem for groups list "grp2,grp3" using the occ command
+    And user "user1" requests "/remote.php/dav/files/user1/local_storage/folder2" with "PROPFIND" using basic auth
+    Then the propfind result should contain these entries:
+      | /hello2.txt |
+    When user "user1" requests "/remote.php/dav/files/user1/local_storage/folder3" with "PROPFIND" using basic auth
+    Then the propfind result should contain these entries:
+      | /hello3.txt |
+    When user "user1" requests "/remote.php/dav/files/user1/local_storage/folder4" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello4.txt |
+    When user "user2" requests "/remote.php/dav/files/user2/folder2" with "PROPFIND" using basic auth
+    Then the propfind result should contain these entries:
+      | /hello2.txt |
+    When user "user3" requests "/remote.php/dav/files/user3/folder3" with "PROPFIND" using basic auth
+    Then the propfind result should contain these entries:
+      | /hello3.txt |
+    When user "user4" requests "/remote.php/dav/files/user4/folder4" with "PROPFIND" using basic auth
+    Then the propfind result should not contain these entries:
+      | /hello4.txt |
+
   Scenario: administrator should be able to create a local mount for a specific user
     Given using new DAV path
     And these users have been created with default attributes:
