@@ -90,19 +90,19 @@ class ViewOnlyPluginTest extends TestCase {
 
 	public function providesDataForCanGet() {
 		return [
-			// has attribute can download - can get file
-			[ $this->createMock(FileInfo::class), true, true],
-			// has no attribute can download - can get file
+			// has attribute secure-view-enabled disabled - can get file
+			[ $this->createMock(FileInfo::class), false, true],
+			// has no attribute secure-view-enabled - can get file
 			[ $this->createMock(FileInfo::class), null, true],
-			// has attribute with can download being disabled - cannot get the file
-			[ $this->createMock(FileInfo::class), false, false],
+			// has attribute secure-view-enabled - cannot get the file
+			[ $this->createMock(FileInfo::class), true, false],
 		];
 	}
 
 	/**
 	 * @dataProvider providesDataForCanGet
 	 */
-	public function testCanGet($nodeInfo, $canDownloadPerm, $expected) {
+	public function testCanGet($nodeInfo, $attrEnabled, $expectCanDownloadFile) {
 		$this->request->expects($this->exactly(1))->method('getPath')->willReturn('files/test/target');
 
 		$davNode = $this->createMock(DavFile::class);
@@ -118,15 +118,15 @@ class ViewOnlyPluginTest extends TestCase {
 
 		$extAttr = $this->createMock(IAttributes::class);
 		$share->method('getAttributes')->willReturn($extAttr);
-		$extAttr->method('getAttribute')->with('core', 'can-download')->willReturn($canDownloadPerm);
+		$extAttr->method('getAttribute')->with('core', 'secure-view-enabled')->willReturn($attrEnabled);
 
 		try {
 			// with these permissions / with this type of node user can download
 			$ret = $this->plugin->checkViewOnly($this->request);
-			$this->assertEquals($expected, $ret);
+			$this->assertEquals($expectCanDownloadFile, $ret);
 		} catch (Forbidden $e) {
-			// this node is share, with read-only and without can-download permission
-			$this->assertFalse($expected);
+			// this node is share, with read-only and with secure-view-only permission
+			$this->assertFalse($expectCanDownloadFile);
 		}
 	}
 }

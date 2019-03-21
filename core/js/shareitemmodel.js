@@ -58,19 +58,20 @@
 	 */
 
 	/**
+	 * @typedef {object} OC.Share.Types.ShareAttribute
+	 * @property {string} name
+	 * @property {string} scope
+	 * @property {bool}   enabled
+	 */
+
+	/**
 	 * @typedef {object} OC.Share.Types.RegisteredShareAttribute
 	 * @property {string} name
 	 * @property {bool}   default
 	 * @property {string} scope
 	 * @property {string} label
 	 * @property {number[]} incompatiblePermissions
-	 */
-
-	/**
-	 * @typedef {object} OC.Share.Types.ShareAttribute
-	 * @property {string} name
-	 * @property {bool}   enabled
-	 * @property {string} scope
+	 * @property {OC.Share.Types.ShareAttribute[]} incompatibleAttributes
 	 */
 
 	/**
@@ -168,17 +169,32 @@
 			}
 			properties.permissions = defaultPermissions & possiblePermissions;
 
-			// set default allowed extra permissions for this share
-			var shareAttributes = [];
-			var allowedAttributes = this.getRegisteredAttributes(properties.permissions);
-			_.map(allowedAttributes, function(attribute) {
-				shareAttributes.push({
-					scope : attribute.scope,
-					name: attribute.name,
-					enabled: attribute.default
+			// Set default attributes for this share based on registered
+			// attributes (filtered by their incompatible permissions)
+			var newShareAttributes = [];
+			var filteredRegisteredAttributes = this.filterRegisteredAttributes(properties.permissions);
+			_.map(filteredRegisteredAttributes, function(filteredRegisteredAttribute) {
+				var isCompatible = true;
+				// Check if this attribute can be added due to its incompatible attributes
+				_.map(filteredRegisteredAttribute.incompatibleAttributes, function(incompatibleAttribute) {
+					_.map(filteredRegisteredAttributes, function(checkAttr) {
+						if (incompatibleAttribute.scope === checkAttr.scope &&
+							incompatibleAttribute.name === checkAttr.name &&
+							incompatibleAttribute.enabled === checkAttr.default) {
+							isCompatible = false;
+						}
+					});
 				});
+
+				if (isCompatible) {
+					newShareAttributes.push({
+						scope : filteredRegisteredAttribute.scope,
+						name: filteredRegisteredAttribute.name,
+						enabled: filteredRegisteredAttribute.default
+					});
+				}
 			});
-			properties.attributes = shareAttributes;
+			properties.attributes = newShareAttributes;
 
 			if (_.isUndefined(properties.path)) {
 				properties.path = this.fileInfoModel.getFullPath();
@@ -215,33 +231,67 @@
 			var self = this;
 			options = options || {};
 
-			var shareAttributes = [];
-			var compatibleAttributes = this.getRegisteredAttributes(properties.permissions);
-			compatibleAttributes.map(function(allowedAttribute) {
-				// Check existing extra permissions which are compatible
+			// Set share attributes for this share based on registered
+			// attributes (filtered by their incompatible permissions
+			// and incompatible attributes)
+			var newShareAttributes = [];
+			var filteredAttributes = [];
+			var filteredRegisteredAttributes = this.filterRegisteredAttributes(properties.permissions);
+			_.map(filteredRegisteredAttributes, function(filteredRegisteredAttribute) {
+				// Check if this allowed registered attribute
+				// is on the list of currently set properties,
+				// and set this attribute
 				var found = false;
-				properties.attributes.map(function(currentAttribute) {
-					if (currentAttribute.name === allowedAttribute.name
-						&& currentAttribute.scope === allowedAttribute.scope) {
+				_.map(properties.attributes, function(currentAttribute) {
+					if (currentAttribute.name === filteredRegisteredAttribute.name
+						&& currentAttribute.scope === filteredRegisteredAttribute.scope) {
 						found = true;
-						shareAttributes.push({
-							scope : currentAttribute.scope,
-							name: currentAttribute.name,
+						filteredAttributes.push({
+							scope : filteredRegisteredAttribute.scope,
+							name: filteredRegisteredAttribute.name,
+							incompatibleAttributes: filteredRegisteredAttribute.incompatibleAttributes,
 							enabled: currentAttribute.enabled
 						});
 					}
 				});
 
-				// if new permissions became available, set default
+				// Make sure allowed registered attributes which are
+				// not yet set are added. These can become available
+				// e.g. because of share permission/attr change
+				// and need to be initialized with their default value
 				if (!found) {
-					shareAttributes.push({
-						scope : allowedAttribute.scope,
-						name: allowedAttribute.name,
-						enabled: allowedAttribute.default
+					filteredAttributes.push({
+						scope : filteredRegisteredAttribute.scope,
+						name: filteredRegisteredAttribute.name,
+						incompatibleAttributes: filteredRegisteredAttribute.incompatibleAttributes,
+						enabled: filteredRegisteredAttribute.default
 					});
 				}
 			});
-			properties.attributes = shareAttributes;
+
+			_.map(filteredAttributes, function(filteredAttribute) {
+				// Filter attributes by their incompatible attributes
+				var isCompatible = true;
+				// Check if this attribute can be added due to its incompatible attributes
+				_.map(filteredAttribute.incompatibleAttributes, function(incompatibleAttribute) {
+					_.map(filteredAttributes, function(checkAttr) {
+						if (incompatibleAttribute.scope === checkAttr.scope &&
+							incompatibleAttribute.name === checkAttr.name &&
+							incompatibleAttribute.enabled === checkAttr.enabled) {
+							isCompatible = false;
+						}
+					});
+				});
+
+				if (isCompatible) {
+					newShareAttributes.push({
+						scope : filteredAttribute.scope,
+						name: filteredAttribute.name,
+						enabled: filteredAttribute.enabled
+					});
+				}
+			});
+			properties.attributes = newShareAttributes;
 
 			return $.ajax({
 				type: 'PUT',
@@ -831,31 +881,29 @@
 		},
 
 		/**
-		 * Based on given share permission, returns all available
-		 * share attributes which are compatible
+		 * Filter registered attributes by current share permissions
 		 *
 		 * @param {number} permissions
 		 * @returns {OC.Share.Types.RegisteredShareAttribute[]}
 		 * @private
 		 */
-		getRegisteredAttributes: function(permissions) {
-			var result = [];
-
+		filterRegisteredAttributes: function(permissions) {
+			var filteredByPermissions = [];
 			for(var i in this._registeredAttributes) {
 				var compatible = true;
-				var availAttr = this._registeredAttributes[i];
-				for(var j in availAttr.incompatiblePermissions) {
-					if (this._hasPermission(permissions, availAttr.incompatiblePermissions[j])) {
+				var attr = this._registeredAttributes[i];
+				for(var ii in attr.incompatiblePermissions) {
+					if (this._hasPermission(permissions, attr.incompatiblePermissions[ii])) {
 						compatible = false;
 					}
 				}
 
 				if (compatible) {
-					result.push(availAttr);
+					filteredByPermissions.push(attr);
 				}
 			}
 
-			return result;
+			return filteredByPermissions;
 		},
 
 		/**
@@ -904,33 +952,20 @@
 		/**
 		 * Apps can register default share attributes
 		 *
-		 * @param {string}   $scopeId
-		 * @param {string}   $attributeName
-		 * @param {string}   $attributeLabel
-		 * @param {boolean}  $attributeDefault
-		 * @param {number[]} $incompatiblePermissions
+		 * @param {OC.Share.Types.RegisteredShareAttribute} $shareAttribute
 		 */
-		registerShareAttribute: function($scopeId, $attributeName, $attributeLabel, $attributeDefault, $incompatiblePermissions) {
-			/** @type OC.Share.Types.RegisteredShareAttribute */
-			var shareAttributes = {
-				scope: $scopeId,
-				name: $attributeName,
-				incompatiblePermissions: $incompatiblePermissions,
-				default: $attributeDefault,
-				label: $attributeLabel
-			};
-
+		registerShareAttribute: function($shareAttribute) {
 			// Add extra permission or update if already existing
 			var exists = false;
 			for(var i in this._registeredAttributes) {
-				if (this._registeredAttributes[i].scope === $scopeId
-					&& this._registeredAttributes[i].name === $attributeName) {
-					this._registeredAttributes[i] = shareAttributes;
+				if (this._registeredAttributes[i].scope === $shareAttribute.scope
+					&& this._registeredAttributes[i].name === $shareAttribute.name) {
+					this._registeredAttributes[i] = $shareAttribute;
 					exists = true;
 				}
 			}
 			if (!exists) {
-				this._registeredAttributes.push(shareAttributes);
+				this._registeredAttributes.push($shareAttribute);
 			}
 
 		}

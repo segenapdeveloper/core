@@ -102,9 +102,9 @@ class ViewOnlyPlugin extends ServerPlugin {
 			$share = $storage->getShare();
 
 			// Check if read-only and on whether permission can download is both set and disabled.
-			$canDownload = $share->getAttributes()->getAttribute('core', 'can-download');
-			if ($canDownload !== null && !$canDownload) {
-				throw new Forbidden('File or folder is in secure-view mode and cannot be directly downloaded.');
+			$blockDownload = $share->getAttributes()->getAttribute('core', 'secure-view-enabled');
+			if ($blockDownload !== null && $blockDownload) {
+				throw new Forbidden('File or folder is in secure viewing only mode and cannot be directly downloaded.');
 			}
 		} catch (NotFound $e) {
 			$this->logger->warning($e->getMessage());

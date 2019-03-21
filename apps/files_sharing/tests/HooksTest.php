@@ -198,10 +198,10 @@ class HooksTest extends TestCase {
 
 		$return[] = [ '/bar.txt', $senderUserFolder, true ];
 
-		// shared file (receiver) with attribute can-download set true -
+		// shared file (receiver) with attribute secure-view-enabled set false -
 		// can download directly
 		$receiverFileShareAttributes = $this->createMock(IAttributes::class);
-		$receiverFileShareAttributes->method('getAttribute')->with('core', 'can-download')->willReturn(true);
+		$receiverFileShareAttributes->method('getAttribute')->with('core', 'secure-view-enabled')->willReturn(false);
 		$receiverFileShare = $this->createMock(IShare::class);
 		$receiverFileShare->method('getAttributes')->willReturn($receiverFileShareAttributes);
 		$receiverFileStorage = $this->createMock(SharedStorage::class);
@@ -214,10 +214,10 @@ class HooksTest extends TestCase {
 
 		$return[] = [ '/share-bar.txt', $receiverUserFolder, true ];
 
-		// shared file (receiver) with attribute can-download set false -
+		// shared file (receiver) with attribute secure-view-enabled set true -
 		// cannot download directly
 		$secureReceiverFileShareAttributes = $this->createMock(IAttributes::class);
-		$secureReceiverFileShareAttributes->method('getAttribute')->with('core', 'can-download')->willReturn(false);
+		$secureReceiverFileShareAttributes->method('getAttribute')->with('core', 'secure-view-enabled')->willReturn(true);
 		$secureReceiverFileShare = $this->createMock(IShare::class);
 		$secureReceiverFileShare->method('getAttributes')->willReturn($secureReceiverFileShareAttributes);
 		$secureReceiverFileStorage = $this->createMock(SharedStorage::class);
@@ -253,7 +253,7 @@ class HooksTest extends TestCase {
 
 		// Mock: Secure-view file/folder shared storage
 		$secureReceiverFileShareAttributes = $this->createMock(IAttributes::class);
-		$secureReceiverFileShareAttributes->method('getAttribute')->with('core', 'can-download')->willReturn(false);
+		$secureReceiverFileShareAttributes->method('getAttribute')->with('core', 'secure-view-enabled')->willReturn(true);
 		$secureReceiverFileShare = $this->createMock(IShare::class);
 		$secureReceiverFileShare->method('getAttributes')->willReturn($secureReceiverFileShareAttributes);
 		$secureSharedStorage = $this->createMock(SharedStorage::class);
